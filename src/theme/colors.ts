@@ -1,0 +1,23 @@
+/** Matches design-prototype/ui-modern.css */
+export const colors = {
+  navy: '#0B1B4D',
+  navyMid: '#1E3A8A',
+  primary: '#2F5BFF',
+  primary2: '#4C7DFF',
+  primarySoft: '#E8EEFF',
+  sky: '#6EB6FF',
+  skyDeep: '#3B82F6',
+  ice: '#F4F7FC',
+  bg: '#F4F7FC',
+  card: '#FFFFFF',
+  white: '#ffffff',
+  text: '#111827',
+  muted: '#6B7280',
+  line: '#E5EAF2',
+  od: '#22A06B',
+  os: '#E24B4A',
+  ok: '#10B981',
+  warn: '#F59E0B',
+  danger: '#EF4444',
+  darkBg: '#050910',
+};

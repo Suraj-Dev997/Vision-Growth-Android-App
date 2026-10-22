@@ -1,0 +1,50 @@
+buildscript {
+    ext {
+        buildToolsVersion = "37.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 37
+        targetSdkVersion = 36
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.2.0"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"
+
+// Windows long-path fix for ALL native modules (gesture-handler, screens, app, …).
+// Android SDK CMake ships Ninja 1.10 which fails on paths > 260 chars.
+def visionNinja = new File(rootProject.projectDir, "tools/ninja/ninja.exe")
+def visionNinjaPath = visionNinja.absolutePath.replace('\\', '/')
+
+def applyWindowsCmakeFix = { Project sub ->
+    def androidExt = sub.extensions.findByName("android")
+    if (androidExt == null || !visionNinja.exists()) return
+    try {
+        def args = androidExt.defaultConfig.externalNativeBuild.cmake.arguments
+        if (args.none { it.startsWith("-DCMAKE_MAKE_PROGRAM") }) {
+            args.add("-DCMAKE_MAKE_PROGRAM=${visionNinjaPath}")
+        }
+        if (args.none { it.startsWith("-DCMAKE_OBJECT_PATH_MAX") }) {
+            args.add("-DCMAKE_OBJECT_PATH_MAX=1024")
+        }
+    } catch (Throwable ignored) {
+        // Library may not expose cmake arguments yet — ignore.
+    }
+}
+
+subprojects { sub ->
+    if (sub.state.executed) {
+        applyWindowsCmakeFix(sub)
+    } else {
+        sub.afterEvaluate { applyWindowsCmakeFix(sub) }
+    }
+}
