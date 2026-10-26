@@ -20,4 +20,5 @@ export const colors = {
   warn: '#F59E0B',
   danger: '#EF4444',
   darkBg: '#050910',
+  yellow: '#f1de0c',
 };
