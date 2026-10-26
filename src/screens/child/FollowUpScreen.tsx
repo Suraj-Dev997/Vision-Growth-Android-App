@@ -21,6 +21,7 @@ import { DateField } from '../../components/DateField';
 import { GraphStrip } from '../../components/OdOsChart';
 import { Chip, Field, OdOsFields, PrimaryButton, SecondaryButton, TopBar } from '../../components/ui';
 import {
+  COMPLIANCE_LABELS,
   COMPLIANCE_OPTIONS,
   MGMT_ICONS,
   MGMT_LABELS,
@@ -72,6 +73,15 @@ function formatDisplayDate(iso: string) {
     .slice(0, 10)
     .match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}-${m[2]}-${m[1]}` : iso || '—';
+}
+
+function SumMetric({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <View style={styles.sumMetric}>
+      <Text style={styles.sumMetricLabel}>{label}</Text>
+      <Text style={styles.sumMetricValue}>{value?.trim() ? value : '—'}</Text>
+    </View>
+  );
 }
 
 export default function FollowUpScreen({ navigation, route }: any) {
@@ -259,8 +269,10 @@ export default function FollowUpScreen({ navigation, route }: any) {
       } else if (mode === 'download') {
         await downloadPdf(urls);
         Alert.alert(
-          'Downloaded',
-          `${urls.filename} is in your Downloads folder. Open the Files or Downloads app to view it.`,
+          Platform.OS === 'ios' ? 'Save PDF' : 'Downloaded',
+          Platform.OS === 'ios'
+            ? 'Choose “Save to Files” in the share sheet to keep the PDF on your iPhone.'
+            : `${urls.filename} is in your Downloads folder. Open the Files or Downloads app to view it.`,
         );
       } else {
         await viewPdf(urls);
@@ -471,40 +483,96 @@ export default function FollowUpScreen({ navigation, route }: any) {
           {step === 'summary' && (
             <>
               <View style={styles.summary}>
-                <Text style={styles.sumTitle}>{childName || 'Follow-up visit'}</Text>
-                <Text style={styles.sumLine}>Date: {formatDisplayDate(form.visit_date)}</Text>
-                <Text style={styles.sumLine}>Age: {form.age_years || '—'} yrs</Text>
-                <Text style={styles.sumLine}>
-                  Compliance: {form.compliance_score || '—'}
-                </Text>
-                <Text style={styles.sumSection}>Visit tracking</Text>
-                <Text style={styles.sumLine}>
-                  OD: VA {form.va_od || '—'} · SE {form.se_od || '—'} · AL {form.al_od || '—'}
-                </Text>
-                <Text style={styles.sumLine}>
-                  OS: VA {form.va_os || '—'} · SE {form.se_os || '—'} · AL {form.al_os || '—'}
-                </Text>
-                <Text style={styles.sumLine}>
-                  Progress:{' '}
-                  {form.progress
-                    ? form.progress.charAt(0).toUpperCase() + form.progress.slice(1)
-                    : '—'}
-                </Text>
+                <View style={styles.sumHeader}>
+                  <Text style={styles.sumTitle}>{childName || 'Follow-up visit'}</Text>
+                  <View style={styles.sumTypePill}>
+                    <Text style={styles.sumTypeText}>Follow-up</Text>
+                  </View>
+                </View>
+
+                <View style={styles.sumMetaGrid}>
+                  <View style={styles.sumMetaItem}>
+                    <Text style={styles.sumMetaLabel}>Date</Text>
+                    <Text style={styles.sumMetaValue}>
+                      {formatDisplayDate(form.visit_date)}
+                    </Text>
+                  </View>
+                  <View style={styles.sumMetaItem}>
+                    <Text style={styles.sumMetaLabel}>Age</Text>
+                    <Text style={styles.sumMetaValue}>{form.age_years || '—'} yrs</Text>
+                  </View>
+                  <View style={styles.sumMetaItem}>
+                    <Text style={styles.sumMetaLabel}>Compliance</Text>
+                    <Text style={styles.sumMetaValue}>
+                      {form.compliance_score
+                        ? COMPLIANCE_LABELS[form.compliance_score]?.title ||
+                          form.compliance_score
+                        : '—'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.sumBlock}>
+                  <Text style={styles.sumSection}>Visit tracking</Text>
+                  <View style={styles.sumEyeCard}>
+                    <Text style={[styles.sumEyeTag, { color: colors.od }]}>OD · Right</Text>
+                    <View style={styles.sumMetrics}>
+                      <SumMetric label="VA" value={form.va_od} />
+                      <SumMetric label="SE" value={form.se_od} />
+                      <SumMetric label="AL" value={form.al_od} />
+                    </View>
+                  </View>
+                  <View style={styles.sumEyeCard}>
+                    <Text style={[styles.sumEyeTag, { color: colors.os }]}>OS · Left</Text>
+                    <View style={styles.sumMetrics}>
+                      <SumMetric label="VA" value={form.va_os} />
+                      <SumMetric label="SE" value={form.se_os} />
+                      <SumMetric label="AL" value={form.al_os} />
+                    </View>
+                  </View>
+                  <View style={styles.sumRiskRow}>
+                    <Text style={styles.sumMetaLabel}>Progress</Text>
+                    <View style={styles.sumProgressPill}>
+                      <Text style={styles.sumProgressText}>
+                        {form.progress
+                          ? PROGRESS_LABELS[form.progress] ||
+                            form.progress.charAt(0).toUpperCase() + form.progress.slice(1)
+                          : '—'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
                 {treatments.length > 0 && (
-                  <Text style={styles.sumLine}>
-                    Treatment: {treatments.map(k => MGMT_LABELS[k] || k).join(', ')}
-                    {treatments.includes('other') && form.other_treatment.trim()
-                      ? ` (${form.other_treatment.trim()})`
-                      : ''}
-                  </Text>
+                  <View style={styles.sumBlock}>
+                    <Text style={styles.sumSection}>Treatment</Text>
+                    <View style={styles.sumChipRow}>
+                      {treatments.map(k => (
+                        <View key={k} style={styles.sumChip}>
+                          <Text style={styles.sumChipText}>{MGMT_LABELS[k] || k}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {treatments.includes('other') && !!form.other_treatment.trim() && (
+                      <Text style={styles.sumOtherNote}>{form.other_treatment.trim()}</Text>
+                    )}
+                  </View>
                 )}
+
                 {plans.length > 0 && (
-                  <Text style={styles.sumLine}>
-                    Plan: {plans.map(k => PLAN_LABELS[k] || k).join(', ')}
-                    {plans.includes('other') && form.plan_other.trim()
-                      ? ` (${form.plan_other.trim()})`
-                      : ''}
-                  </Text>
+                  <View style={styles.sumBlock}>
+                    <Text style={styles.sumSection}>Plan</Text>
+                    <View style={styles.sumChipRow}>
+                      {plans.map(k => (
+                        <View key={k} style={styles.sumChip}>
+                          <Text style={styles.sumChipText}>{PLAN_LABELS[k] || k}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {plans.includes('other') && !!form.plan_other.trim() && (
+                      <Text style={styles.sumOtherNote}>{form.plan_other.trim()}</Text>
+                    )}
+                  </View>
                 )}
               </View>
 
@@ -618,20 +686,104 @@ const styles = StyleSheet.create({
   fundusTitle: { fontWeight: '800', color: colors.text, marginBottom: 10 },
   summary: {
     backgroundColor: colors.white,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: colors.line,
     marginBottom: 8,
   },
-  sumTitle: { fontWeight: '800', fontSize: 18, color: colors.text, marginBottom: 8 },
+  sumHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    gap: 10,
+  },
+  sumTitle: { fontWeight: '800', fontSize: 20, color: colors.text, flex: 1 },
+  sumTypePill: {
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  sumTypeText: { color: colors.primary, fontWeight: '800', fontSize: 11 },
+  sumMetaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 },
+  sumMetaItem: {
+    flexGrow: 1,
+    minWidth: '28%',
+    backgroundColor: colors.ice,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  sumMetaLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  sumMetaValue: { color: colors.text, fontWeight: '700', fontSize: 14 },
+  sumBlock: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
   sumSection: {
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 14,
     color: colors.navy,
-    marginTop: 10,
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  sumLine: { color: colors.muted, marginBottom: 4 },
+  sumRiskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sumProgressPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  sumProgressText: { color: '#92400E', fontWeight: '800', fontSize: 12 },
+  sumEyeCard: {
+    backgroundColor: colors.ice,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+  },
+  sumEyeTag: { fontWeight: '800', fontSize: 12, marginBottom: 8 },
+  sumMetrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sumMetric: {
+    minWidth: '22%',
+    flexGrow: 1,
+    backgroundColor: colors.white,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  sumMetricLabel: { color: colors.muted, fontSize: 10, fontWeight: '700', marginBottom: 2 },
+  sumMetricValue: { color: colors.text, fontWeight: '800', fontSize: 13 },
+  sumChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  sumChip: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  sumChipText: { color: colors.navy, fontWeight: '700', fontSize: 11 },
+  sumOtherNote: {
+    marginTop: 8,
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
+  },
   pdfRow: { flexDirection: 'row', marginTop: 4 },
 });

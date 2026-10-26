@@ -280,8 +280,10 @@ export default function AssessmentScreen({ navigation }: any) {
       } else if (mode === 'download') {
         await downloadPdf(urls);
         Alert.alert(
-          'Downloaded',
-          `${urls.filename} is in your Downloads folder. Open the Files or Downloads app to view it.`,
+          Platform.OS === 'ios' ? 'Save PDF' : 'Downloaded',
+          Platform.OS === 'ios'
+            ? 'Choose “Save to Files” in the share sheet to keep the PDF on your iPhone.'
+            : `${urls.filename} is in your Downloads folder. Open the Files or Downloads app to view it.`,
         );
       } else {
         await viewPdf(urls);

@@ -1,4 +1,4 @@
-import { Linking, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
 
@@ -7,6 +7,14 @@ type PdfUrls = {
   downloadUrl: string;
   filename: string;
 };
+
+function stripFileScheme(path: string): string {
+  return path.replace(/^file:\/\//, '');
+}
+
+function toFileUrl(path: string): string {
+  return path.startsWith('file://') ? path : `file://${path}`;
+}
 
 /** Always fetch a fresh PDF into a unique cache path (avoids stale Print/View). */
 async function fetchPdfToCache(urls: PdfUrls): Promise<string> {
@@ -29,21 +37,25 @@ async function fetchPdfToCache(urls: PdfUrls): Promise<string> {
  */
 export async function viewPdf(urls: PdfUrls) {
   const filePath = await fetchPdfToCache(urls);
+  const path = stripFileScheme(filePath);
 
   if (Platform.OS === 'android') {
-    await ReactNativeBlobUtil.android.actionViewIntent(filePath, 'application/pdf');
+    await ReactNativeBlobUtil.android.actionViewIntent(path, 'application/pdf');
     return;
   }
 
-  await Linking.openURL(filePath.startsWith('file://') ? filePath : `file://${filePath}`);
+  // iOS: Linking.openURL(file://…) fails; use Quick Look preview instead
+  ReactNativeBlobUtil.ios.previewDocument(path);
 }
 
 /**
- * Save PDF into the public Downloads folder (visible in Files / Downloads app).
- * On Android 10+ this uses MediaStore; writing DownloadDir alone often stays app-private.
+ * Save PDF where the user can find it.
+ * Android → Downloads (MediaStore).
+ * iOS → no public Downloads folder; opens share sheet so they can “Save to Files”.
  */
 export async function downloadPdf(urls: PdfUrls): Promise<string> {
   const cachePath = await fetchPdfToCache(urls);
+  const path = stripFileScheme(cachePath);
 
   if (Platform.OS === 'android') {
     try {
@@ -54,9 +66,9 @@ export async function downloadPdf(urls: PdfUrls): Promise<string> {
           mimeType: 'application/pdf',
         },
         'Download',
-        cachePath,
+        path,
       );
-      return mediaPath || cachePath;
+      return mediaPath || path;
     } catch {
       await ReactNativeBlobUtil.config({
         addAndroidDownloads: {
@@ -72,11 +84,22 @@ export async function downloadPdf(urls: PdfUrls): Promise<string> {
     }
   }
 
+  // iOS: copy into Documents, then let the user Save to Files / share
   const dest = `${ReactNativeBlobUtil.fs.dirs.DocumentDir}/${urls.filename}`;
   if (await ReactNativeBlobUtil.fs.exists(dest)) {
     await ReactNativeBlobUtil.fs.unlink(dest);
   }
-  await ReactNativeBlobUtil.fs.cp(cachePath, dest);
+  await ReactNativeBlobUtil.fs.cp(path, dest);
+
+  await Share.open({
+    title: urls.filename,
+    subject: urls.filename,
+    url: toFileUrl(dest),
+    type: 'application/pdf',
+    filename: urls.filename.replace(/\.pdf$/i, ''),
+    failOnCancel: false,
+  });
+
   return dest;
 }
 
@@ -86,7 +109,7 @@ export async function downloadPdf(urls: PdfUrls): Promise<string> {
  */
 export async function sharePdfFile(urls: PdfUrls, message?: string) {
   const filePath = await fetchPdfToCache(urls);
-  const fileUrl = Platform.OS === 'android' ? `file://${filePath}` : filePath;
+  const fileUrl = toFileUrl(filePath);
 
   await Share.open({
     title: urls.filename,

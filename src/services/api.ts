@@ -87,10 +87,13 @@ export const authApi = {
 export type AppConfig = {
   android_min_version_code: number;
   android_latest_version_code: number;
+  ios_min_version_code: number;
+  ios_latest_version_code: number;
   force_update: boolean;
   update_title: string;
   update_message: string;
   android_store_url: string;
+  ios_store_url: string;
 };
 
 export const appApi = {

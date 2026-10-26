@@ -21,7 +21,11 @@ export function ClinicalRow({
       <View style={[styles.check, selected && styles.checkOn]}>
         {selected ? <Text style={styles.checkMark}>✓</Text> : null}
       </View>
-      {!!icon && <Text style={styles.ico}>{icon}</Text>}
+      {!!icon && (
+        <Text style={styles.ico} allowFontScaling={false}>
+          {icon}
+        </Text>
+      )}
       <View style={{ flex: 1 }}>
         <Text style={[styles.txt, selected && styles.txtOn]}>{label}</Text>
         {!!sub && <Text style={styles.sub}>{sub}</Text>}
@@ -237,7 +241,13 @@ const styles = StyleSheet.create({
   },
   checkOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkMark: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  ico: { fontSize: 18, width: 28, textAlign: 'center', marginRight: 8 },
+  ico: {
+    fontSize: 16,
+    lineHeight: 20,
+    width: 24,
+    textAlign: 'center',
+    marginRight: 8,
+  },
   txt: { color: colors.text, fontWeight: '600', fontSize: 15 },
   txtOn: { color: colors.navy },
   sub: { color: colors.muted, fontSize: 12, marginTop: 2 },

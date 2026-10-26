@@ -57,7 +57,7 @@ export const MGMT_LABELS: Record<string, string> = {
 export const MGMT_ICONS: Record<string, string> = {
   observation: '👁',
   spectacles: '👓',
-  dims_miyosmart: '◎◎',
+  dims_miyosmart: '◉',
   contact_lens: '◐',
   atropine: '💧',
   orthokeratology: '🌙',

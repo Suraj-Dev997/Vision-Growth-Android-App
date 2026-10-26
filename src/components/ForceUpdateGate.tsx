@@ -4,22 +4,32 @@ import {
   Alert,
   Linking,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { APP_VERSION_CODE } from '../config/appVersion';
+import { APP_VERSION_CODE, IOS_BUILD_NUMBER } from '../config/appVersion';
 import { appApi, AppConfig } from '../services/api';
 import { colors } from '../theme/colors';
 
+const PLAY_STORE_FALLBACK =
+  'https://play.google.com/store/apps/details?id=com.visiongrowth';
+const APP_STORE_FALLBACK = 'https://apps.apple.com/app/id000000000';
+
 /**
- * Soft prompt or full-screen block based on /app/config vs local APP_VERSION_CODE.
+ * Soft prompt or full-screen block based on /app/config vs local build.
+ * Android uses android_* fields + Play Store; iOS uses ios_* + App Store.
+ * Live Play builds that only know android_* keep working unchanged.
  */
 export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [config, setConfig] = useState<AppConfig | null>(null);
+
+  const isIos = Platform.OS === 'ios';
+  const localBuild = isIos ? IOS_BUILD_NUMBER : APP_VERSION_CODE;
 
   useEffect(() => {
     let cancelled = false;
@@ -33,11 +43,19 @@ export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
           return;
         }
         setConfig(cfg);
-        const min = Number(cfg.android_min_version_code || 1);
-        const latest = Number(cfg.android_latest_version_code || min);
+
+        const min = Number(
+          isIos ? cfg.ios_min_version_code ?? 1 : cfg.android_min_version_code || 1,
+        );
+        const latest = Number(
+          isIos
+            ? cfg.ios_latest_version_code ?? min
+            : cfg.android_latest_version_code || min,
+        );
         const force = Boolean(cfg.force_update);
-        const belowMin = APP_VERSION_CODE < min;
-        const behindLatest = APP_VERSION_CODE < latest;
+        const belowMin = localBuild < min;
+        const behindLatest = localBuild < latest;
+        const storeName = isIos ? 'App Store' : 'Play Store';
 
         // Force: below min always, or force_update=1 and behind latest — no "Later"
         if (belowMin || (force && behindLatest)) {
@@ -45,12 +63,12 @@ export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
         } else if (behindLatest) {
           Alert.alert(
             cfg.update_title || 'Update available',
-            cfg.update_message || 'A new version is available on Play Store.',
+            cfg.update_message || `A new version is available on ${storeName}.`,
             [
               { text: 'Later', style: 'cancel' },
               {
                 text: 'Update',
-                onPress: () => openStore(cfg.android_store_url),
+                onPress: () => openStore(cfg, isIos),
               },
             ],
           );
@@ -64,7 +82,7 @@ export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isIos, localBuild]);
 
   if (!ready) {
     return (
@@ -74,6 +92,21 @@ export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const requiredMin = config
+    ? Math.max(
+        Number(
+          isIos
+            ? config.ios_min_version_code ?? 1
+            : config.android_min_version_code || 1,
+        ),
+        Number(
+          isIos
+            ? config.ios_latest_version_code ?? 1
+            : config.android_latest_version_code || 1,
+        ),
+      )
+    : null;
+
   return (
     <>
       {children}
@@ -82,20 +115,15 @@ export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
           <Text style={styles.blockTitle}>{config?.update_title || 'Update required'}</Text>
           <Text style={styles.blockMsg}>
             {config?.update_message ||
-              'Please update VISION Growth from the Play Store to continue.'}
+              `Please update VISION Growth from the ${
+                isIos ? 'App Store' : 'Play Store'
+              } to continue.`}
           </Text>
           <Text style={styles.ver}>
-            Your version code: {APP_VERSION_CODE}
-            {config
-              ? ` · Required: ${Math.max(
-                  Number(config.android_min_version_code || 1),
-                  Number(config.android_latest_version_code || 1),
-                )}+`
-              : ''}
+            Your {isIos ? 'build' : 'version code'}: {localBuild}
+            {requiredMin != null ? ` · Required: ${requiredMin}+` : ''}
           </Text>
-          <Pressable
-            style={styles.btn}
-            onPress={() => openStore(config?.android_store_url)}>
+          <Pressable style={styles.btn} onPress={() => openStore(config, isIos)}>
             <Text style={styles.btnText}>Update now</Text>
           </Pressable>
         </View>
@@ -104,11 +132,15 @@ export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
   );
 }
 
-function openStore(url?: string) {
-  const target =
-    url || 'https://play.google.com/store/apps/details?id=com.visiongrowth';
+function openStore(cfg: AppConfig | null | undefined, isIos: boolean) {
+  const target = isIos
+    ? cfg?.ios_store_url || APP_STORE_FALLBACK
+    : cfg?.android_store_url || PLAY_STORE_FALLBACK;
   Linking.openURL(target).catch(() => {
-    Alert.alert('Open Play Store', 'Could not open the store link. Search for VISION Growth.');
+    Alert.alert(
+      isIos ? 'Open App Store' : 'Open Play Store',
+      'Could not open the store link. Search for VISION Growth.',
+    );
   });
 }
 
