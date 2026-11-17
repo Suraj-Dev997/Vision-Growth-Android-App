@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -12,13 +14,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from 'react-native-svg';
+import { optionsForClinicalKind } from '../constants/clinicalCharts';
 import { useLayout } from '../hooks/useLayout';
 import { colors } from '../theme/colors';
-import {
-  formatVa,
-  sanitizeBv,
-  sanitizeClinical,
-} from '../utils/validation';
+import { sanitizeBv, sanitizeClinical } from '../utils/validation';
 
 const visionLogo = require('../assets/visionlogo.png');
 
@@ -242,10 +241,89 @@ function clinicalPlaceholder(kind?: string, label?: string) {
   const k = String(kind || '').toLowerCase();
   const l = String(label || '').toLowerCase();
   if (k === 'bv' || l.includes('binocular')) return 'e.g. N · 2 · 6/6';
-  if (k === 'va' || l.includes('(va)') || l.includes('vision')) return 'e.g. 6/6 · 6/9 · 6/18';
-  if (k === 'se' || l.includes('(se)') || l.includes('refraction')) return 'e.g. -0.50 (+1…−5)';
-  if (k === 'al' || l.includes('(al)') || l.includes('axial')) return 'e.g. 23.50 (20–30)';
-  return 'e.g. 6/6';
+  if (k === 'va' || l.includes('(va)') || l.includes('vision')) return 'Select VA';
+  if (k === 'se' || l.includes('(se)') || l.includes('refraction')) return 'Select SE';
+  if (k === 'al' || l.includes('(al)') || l.includes('axial')) return 'Select AL';
+  return 'Select';
+}
+
+function OdOsSelect({
+  value,
+  options,
+  placeholder,
+  borderStyle,
+  eyeColor,
+  accessibilityLabel,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  placeholder: string;
+  borderStyle: ViewStyle;
+  eyeColor: string;
+  accessibilityLabel: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+  const selectedIndex = useMemo(
+    () => Math.max(0, options.findIndex(o => o === value)),
+    [options, value],
+  );
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        style={[styles.iconField, borderStyle, styles.selectPress]}>
+        <Text
+          style={[styles.input, !value && { color: colors.muted }]}
+          numberOfLines={1}>
+          {value || placeholder}
+        </Text>
+        <Text style={[styles.selectChevron, { color: eyeColor }]}>▾</Text>
+      </Pressable>
+
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+        <View style={styles.selectModalRoot}>
+          <Pressable style={styles.selectBackdrop} onPress={() => setOpen(false)} />
+          <View style={[styles.selectSheet, { paddingBottom: 12 + insets.bottom }]}>
+            <View style={styles.selectSheetHead}>
+              <Text style={styles.selectSheetTitle}>{accessibilityLabel}</Text>
+              <Pressable onPress={() => setOpen(false)} hitSlop={12}>
+                <Text style={styles.selectSheetClose}>Close</Text>
+              </Pressable>
+            </View>
+            <FlatList
+              data={options}
+              keyExtractor={item => item}
+              initialScrollIndex={value ? selectedIndex : 0}
+              getItemLayout={(_, index) => ({ length: 48, offset: 48 * index, index })}
+              onScrollToIndexFailed={() => {}}
+              renderItem={({ item }) => {
+                const on = item === value;
+                return (
+                  <Pressable
+                    onPress={() => {
+                      onChange(item);
+                      setOpen(false);
+                    }}
+                    style={[styles.selectRow, on && styles.selectRowOn]}>
+                    <Text style={[styles.selectRowText, on && styles.selectRowTextOn]}>
+                      {item}
+                    </Text>
+                    {on ? <Text style={styles.selectTick}>✓</Text> : null}
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
 }
 
 export function OdOsFields({
@@ -261,64 +339,90 @@ export function OdOsFields({
   os: string;
   onChangeOd: (v: string) => void;
   onChangeOs: (v: string) => void;
-  /** va | se | al | bv — drives example placeholder */
+  /** va | se | al | bv — dropdown for va/se/al; text for bv */
   kind?: string;
 }) {
   const example = clinicalPlaceholder(kind, label);
-  const isVa = kind === 'va';
   const isBv = kind === 'bv';
+  const selectOptions = optionsForClinicalKind(kind);
+  const useSelect = !!selectOptions && !isBv;
+
   const sanitize = (v: string) => (isBv ? sanitizeBv(v) : sanitizeClinical(v));
   const finalize = (side: 'od' | 'os', raw: string) => {
     const cleaned = sanitize(raw);
     let next = cleaned;
-    if (isVa) next = formatVa(cleaned) || cleaned;
-    else if (isBv && /^n$/i.test(cleaned)) next = 'N';
+    if (isBv && /^n$/i.test(cleaned)) next = 'N';
     if (side === 'od') onChangeOd(next);
     else onChangeOs(next);
   };
+
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.odOsRow}>
         <View style={styles.odOsCol}>
-          <Text style={[styles.odOsEyeLabel, { color: colors.od }]}>OD · Right eye</Text>
-          <View style={[styles.iconField, styles.odBorder]}>
-            <TextInput
+          <Text style={[styles.odOsEyeLabel, { color: colors.od }]}>Right eye</Text>
+          {useSelect ? (
+            <OdOsSelect
               value={od}
-              onChangeText={v => onChangeOd(sanitize(v))}
-              onBlur={() => finalize('od', od)}
+              options={selectOptions!}
               placeholder={example}
-              placeholderTextColor={colors.muted}
-              keyboardType={isBv ? 'default' : 'numbers-and-punctuation'}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              textContentType="none"
-              importantForAutofill="no"
-              accessibilityLabel={`${label} OD right eye`}
-              style={styles.input}
+              borderStyle={styles.odBorder}
+              eyeColor={colors.od}
+              accessibilityLabel={`${label} · Right eye`}
+              onChange={onChangeOd}
             />
-          </View>
+          ) : (
+            <View style={[styles.iconField, styles.odBorder]}>
+              <TextInput
+                value={od}
+                onChangeText={v => onChangeOd(sanitize(v))}
+                onBlur={() => finalize('od', od)}
+                placeholder={example}
+                placeholderTextColor={colors.muted}
+                keyboardType="default"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                textContentType="none"
+                importantForAutofill="no"
+                accessibilityLabel={`${label} Right eye`}
+                style={styles.input}
+              />
+            </View>
+          )}
         </View>
         <View style={styles.odOsCol}>
-          <Text style={[styles.odOsEyeLabel, { color: colors.os }]}>OS · Left eye</Text>
-          <View style={[styles.iconField, styles.osBorder]}>
-            <TextInput
+          <Text style={[styles.odOsEyeLabel, { color: colors.os }]}>Left eye</Text>
+          {useSelect ? (
+            <OdOsSelect
               value={os}
-              onChangeText={v => onChangeOs(sanitize(v))}
-              onBlur={() => finalize('os', os)}
+              options={selectOptions!}
               placeholder={example}
-              placeholderTextColor={colors.muted}
-              keyboardType={isBv ? 'default' : 'numbers-and-punctuation'}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              textContentType="none"
-              importantForAutofill="no"
-              accessibilityLabel={`${label} OS left eye`}
-              style={styles.input}
+              borderStyle={styles.osBorder}
+              eyeColor={colors.os}
+              accessibilityLabel={`${label} · Left eye`}
+              onChange={onChangeOs}
             />
-          </View>
+          ) : (
+            <View style={[styles.iconField, styles.osBorder]}>
+              <TextInput
+                value={os}
+                onChangeText={v => onChangeOs(sanitize(v))}
+                onBlur={() => finalize('os', os)}
+                placeholder={example}
+                placeholderTextColor={colors.muted}
+                keyboardType="default"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                textContentType="none"
+                importantForAutofill="no"
+                accessibilityLabel={`${label} Left eye`}
+                style={styles.input}
+              />
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -503,6 +607,41 @@ const styles = StyleSheet.create({
   },
   odBorder: { borderColor: colors.od, borderWidth: 1.5 },
   osBorder: { borderColor: colors.os, borderWidth: 1.5 },
+  selectPress: { justifyContent: 'space-between' },
+  selectChevron: { fontSize: 14, fontWeight: '800', marginLeft: 6 },
+  selectModalRoot: { flex: 1, justifyContent: 'flex-end' },
+  selectBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.45)' },
+  selectSheet: {
+    maxHeight: '70%',
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingTop: 10,
+  },
+  selectSheetHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  selectSheetTitle: { fontWeight: '800', color: colors.navy, fontSize: 15, flex: 1, marginRight: 12 },
+  selectSheetClose: { color: colors.primary, fontWeight: '700', fontSize: 14 },
+  selectRow: {
+    height: 48,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  selectRowOn: { backgroundColor: colors.primarySoft },
+  selectRowText: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  selectRowTextOn: { color: colors.primary, fontWeight: '800' },
+  selectTick: { color: colors.primary, fontWeight: '800', fontSize: 16 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

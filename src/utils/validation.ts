@@ -293,20 +293,20 @@ export function clinicalFormatError(
       return null;
     }
     if (isVa) {
-      if (!isValidVa(val)) {
-        return `${side} VA must be Snellen 6/${VA_DENOM_MIN} to 6/${VA_DENOM_MAX} (e.g. 6/6, 6/9, 6/18)`;
+      if (!isValidUsualVa(val) && !isValidVa(val)) {
+        return `${side} VA: select a value from the list (6/60 … 6/3)`;
       }
       return null;
     }
     if (kind === 'se') {
       if (!isValidClinical(val) || !isValidSe(val)) {
-        return `${side} SE must be between ${SE_MIN.toFixed(2)} and +${SE_MAX.toFixed(2)} D`;
+        return `${side} SE: select from +${SE_MAX.toFixed(2)} to ${SE_MIN.toFixed(2)} D`;
       }
       return null;
     }
     if (kind === 'al') {
       if (!isValidClinical(val) || !isValidAl(val)) {
-        return `${side} axial length must be between ${AL_MIN} and ${AL_MAX} mm`;
+        return `${side} AL: select from the list (20.0–26.0 mm)`;
       }
       return null;
     }

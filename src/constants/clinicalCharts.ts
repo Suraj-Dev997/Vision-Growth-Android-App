@@ -32,6 +32,9 @@ export const SE_TICK_STEP = 0.25;
 export const AL_MIN = 20;
 export const AL_MAX = 30;
 export const AL_TICK_STEP = 0.5;
+/** Input picker range (graph axis still uses AL_MIN…AL_MAX) */
+export const AL_INPUT_MAX = 26;
+export const AL_INPUT_STEP = 0.1;
 export const VA_LOGMAR_MIN = -0.3;
 export const VA_LOGMAR_MAX = 1.0;
 /** Allowed Snellen denominator range for typed VA (6/3 … 6/60). */
@@ -155,6 +158,35 @@ export function rangeTicks(min: number, max: number, step: number) {
     ticks.push(Number(v.toFixed(6)));
   }
   return ticks;
+}
+
+/** VA dropdown — official LogMAR table (6/60 … 6/3). */
+export const VA_SELECT_OPTIONS: string[] = VA_LOGMAR_TABLE.map(r => r.snellen);
+
+/** SE dropdown — +1.00 … −5.00 in 0.25 D steps. */
+export function formatSeOption(n: number): string {
+  if (Math.abs(n) < 1e-9) return '0.00';
+  return n > 0 ? `+${n.toFixed(2)}` : n.toFixed(2);
+}
+
+export const SE_SELECT_OPTIONS: string[] = rangeTicks(SE_MIN, SE_MAX, SE_TICK_STEP)
+  .slice()
+  .reverse()
+  .map(formatSeOption);
+
+/** AL dropdown — 20.0 … 26.0 in 0.1 mm steps. */
+export const AL_SELECT_OPTIONS: string[] = rangeTicks(
+  AL_MIN,
+  AL_INPUT_MAX,
+  AL_INPUT_STEP,
+).map(n => n.toFixed(1));
+
+export function optionsForClinicalKind(kind?: string): string[] | null {
+  const k = String(kind || '').toLowerCase();
+  if (k === 'va') return VA_SELECT_OPTIONS;
+  if (k === 'se') return SE_SELECT_OPTIONS;
+  if (k === 'al') return AL_SELECT_OPTIONS;
+  return null;
 }
 
 /** Thin a tick list evenly to at most maxTicks (keeps ends). */
