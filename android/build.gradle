@@ -22,29 +22,33 @@ apply plugin: "com.facebook.react.rootproject"
 
 // Windows long-path fix for ALL native modules (gesture-handler, screens, app, …).
 // Android SDK CMake ships Ninja 1.10 which fails on paths > 260 chars.
-def visionNinja = new File(rootProject.projectDir, "tools/ninja/ninja.exe")
-def visionNinjaPath = visionNinja.absolutePath.replace('\\', '/')
+// Skip on macOS/Linux — ninja.exe is a Windows binary.
+def isWindows = System.properties['os.name'].toLowerCase().contains('windows')
+if (isWindows) {
+    def visionNinja = new File(rootProject.projectDir, "tools/ninja/ninja.exe")
+    def visionNinjaPath = visionNinja.absolutePath.replace('\\', '/')
 
-def applyWindowsCmakeFix = { Project sub ->
-    def androidExt = sub.extensions.findByName("android")
-    if (androidExt == null || !visionNinja.exists()) return
-    try {
-        def args = androidExt.defaultConfig.externalNativeBuild.cmake.arguments
-        if (args.none { it.startsWith("-DCMAKE_MAKE_PROGRAM") }) {
-            args.add("-DCMAKE_MAKE_PROGRAM=${visionNinjaPath}")
+    def applyWindowsCmakeFix = { Project sub ->
+        def androidExt = sub.extensions.findByName("android")
+        if (androidExt == null || !visionNinja.exists()) return
+        try {
+            def args = androidExt.defaultConfig.externalNativeBuild.cmake.arguments
+            if (args.none { it.startsWith("-DCMAKE_MAKE_PROGRAM") }) {
+                args.add("-DCMAKE_MAKE_PROGRAM=${visionNinjaPath}")
+            }
+            if (args.none { it.startsWith("-DCMAKE_OBJECT_PATH_MAX") }) {
+                args.add("-DCMAKE_OBJECT_PATH_MAX=1024")
+            }
+        } catch (Throwable ignored) {
+            // Library may not expose cmake arguments yet — ignore.
         }
-        if (args.none { it.startsWith("-DCMAKE_OBJECT_PATH_MAX") }) {
-            args.add("-DCMAKE_OBJECT_PATH_MAX=1024")
-        }
-    } catch (Throwable ignored) {
-        // Library may not expose cmake arguments yet — ignore.
     }
-}
 
-subprojects { sub ->
-    if (sub.state.executed) {
-        applyWindowsCmakeFix(sub)
-    } else {
-        sub.afterEvaluate { applyWindowsCmakeFix(sub) }
+    subprojects { sub ->
+        if (sub.state.executed) {
+            applyWindowsCmakeFix(sub)
+        } else {
+            sub.afterEvaluate { applyWindowsCmakeFix(sub) }
+        }
     }
 }

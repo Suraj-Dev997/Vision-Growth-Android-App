@@ -85,15 +85,18 @@ android {
         versionCode 1
         versionName "1.0"
 
-        // Windows: Android SDK ships Ninja 1.10 which fails on paths >260 chars.
+        // Windows only: Android SDK ships Ninja 1.10 which fails on paths >260 chars.
         // Use Ninja 1.12+ from android/tools/ninja and raise CMake object path limit.
-        externalNativeBuild {
-            cmake {
-                def ninjaPath = new File(rootProject.projectDir, "tools/ninja/ninja.exe")
-                        .absolutePath
-                        .replace('\\', '/')
-                arguments "-DCMAKE_MAKE_PROGRAM=${ninjaPath}",
-                        "-DCMAKE_OBJECT_PATH_MAX=1024"
+        // On macOS/Linux, let the SDK CMake use its own Ninja.
+        if (System.properties['os.name'].toLowerCase().contains('windows')) {
+            externalNativeBuild {
+                cmake {
+                    def ninjaPath = new File(rootProject.projectDir, "tools/ninja/ninja.exe")
+                            .absolutePath
+                            .replace('\\', '/')
+                    arguments "-DCMAKE_MAKE_PROGRAM=${ninjaPath}",
+                            "-DCMAKE_OBJECT_PATH_MAX=1024"
+                }
             }
         }
     }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +11,7 @@ import {
   TextInputProps,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from 'react-native-svg';
@@ -247,6 +248,14 @@ function clinicalPlaceholder(kind?: string, label?: string) {
   return 'Select';
 }
 
+function selectHint(kind?: string): string {
+  const k = String(kind || '').toLowerCase();
+  if (k === 'va') return 'Snellen VA';
+  if (k === 'se') return 'Diopters (D)';
+  if (k === 'al') return 'Millimetres (mm)';
+  return 'Select a value';
+}
+
 function OdOsSelect({
   value,
   options,
@@ -254,6 +263,7 @@ function OdOsSelect({
   borderStyle,
   eyeColor,
   accessibilityLabel,
+  kind,
   onChange,
 }: {
   value: string;
@@ -262,14 +272,33 @@ function OdOsSelect({
   borderStyle: ViewStyle;
   eyeColor: string;
   accessibilityLabel: string;
+  kind?: string;
   onChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const listRef = useRef<FlatList<string>>(null);
   const selectedIndex = useMemo(
     () => Math.max(0, options.findIndex(o => o === value)),
     [options, value],
   );
+
+  useEffect(() => {
+    if (!open || !value || selectedIndex < 0) return;
+    const t = setTimeout(() => {
+      try {
+        listRef.current?.scrollToIndex({
+          index: selectedIndex,
+          animated: false,
+          viewPosition: 0.35,
+        });
+      } catch {
+        // list may not be ready yet
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [open, selectedIndex, value]);
 
   return (
     <>
@@ -279,7 +308,7 @@ function OdOsSelect({
         accessibilityLabel={accessibilityLabel}
         style={[styles.iconField, borderStyle, styles.selectPress]}>
         <Text
-          style={[styles.input, !value && { color: colors.muted }]}
+          style={[styles.selectValue, !value && styles.selectPlaceholder]}
           numberOfLines={1}>
           {value || placeholder}
         </Text>
@@ -289,19 +318,42 @@ function OdOsSelect({
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
         <View style={styles.selectModalRoot}>
           <Pressable style={styles.selectBackdrop} onPress={() => setOpen(false)} />
-          <View style={[styles.selectSheet, { paddingBottom: 12 + insets.bottom }]}>
+          <View
+            style={[
+              styles.selectSheet,
+              {
+                maxHeight: height * 0.72,
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}>
+            <View style={styles.selectHandle} />
             <View style={styles.selectSheetHead}>
-              <Text style={styles.selectSheetTitle}>{accessibilityLabel}</Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={12}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={styles.selectSheetTitle} numberOfLines={2}>
+                  {accessibilityLabel}
+                </Text>
+                <Text style={styles.selectSheetSub}>{selectHint(kind)}</Text>
+              </View>
+              <Pressable onPress={() => setOpen(false)} hitSlop={10} style={styles.selectCloseBtn}>
                 <Text style={styles.selectSheetClose}>Close</Text>
               </Pressable>
             </View>
             <FlatList
+              ref={listRef}
               data={options}
               keyExtractor={item => item}
-              initialScrollIndex={value ? selectedIndex : 0}
-              getItemLayout={(_, index) => ({ length: 48, offset: 48 * index, index })}
-              onScrollToIndexFailed={() => {}}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.selectListContent}
+              getItemLayout={(_, index) => ({ length: 52, offset: 52 * index, index })}
+              onScrollToIndexFailed={info => {
+                setTimeout(() => {
+                  listRef.current?.scrollToIndex({
+                    index: info.index,
+                    animated: false,
+                    viewPosition: 0.35,
+                  });
+                }, 100);
+              }}
               renderItem={({ item }) => {
                 const on = item === value;
                 return (
@@ -370,6 +422,7 @@ export function OdOsFields({
               borderStyle={styles.odBorder}
               eyeColor={colors.od}
               accessibilityLabel={`${label} · Right eye`}
+              kind={kind}
               onChange={onChangeOd}
             />
           ) : (
@@ -402,6 +455,7 @@ export function OdOsFields({
               borderStyle={styles.osBorder}
               eyeColor={colors.os}
               accessibilityLabel={`${label} · Left eye`}
+              kind={kind}
               onChange={onChangeOs}
             />
           ) : (
@@ -608,40 +662,87 @@ const styles = StyleSheet.create({
   odBorder: { borderColor: colors.od, borderWidth: 1.5 },
   osBorder: { borderColor: colors.os, borderWidth: 1.5 },
   selectPress: { justifyContent: 'space-between' },
+  selectValue: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    paddingVertical: 12,
+  },
+  selectPlaceholder: { color: colors.muted, fontWeight: '500' },
   selectChevron: { fontSize: 14, fontWeight: '800', marginLeft: 6 },
-  selectModalRoot: { flex: 1, justifyContent: 'flex-end' },
-  selectBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.45)' },
+  selectModalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(11, 27, 77, 0.45)',
+  },
+  selectBackdrop: { ...StyleSheet.absoluteFillObject },
   selectSheet: {
-    maxHeight: '70%',
     backgroundColor: colors.white,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    paddingTop: 10,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    overflow: 'hidden',
+  },
+  selectHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.line,
+    marginTop: 10,
+    marginBottom: 4,
   },
   selectSheetHead: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    alignItems: 'flex-start',
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
-  selectSheetTitle: { fontWeight: '800', color: colors.navy, fontSize: 15, flex: 1, marginRight: 12 },
-  selectSheetClose: { color: colors.primary, fontWeight: '700', fontSize: 14 },
+  selectSheetTitle: { fontWeight: '800', color: colors.navy, fontSize: 16 },
+  selectSheetSub: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  selectCloseBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
+  },
+  selectSheetClose: { color: colors.primary, fontWeight: '800', fontSize: 13 },
+  selectListContent: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
   selectRow: {
-    height: 48,
-    paddingHorizontal: 16,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.line,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginBottom: 4,
+    backgroundColor: colors.ice,
   },
-  selectRowOn: { backgroundColor: colors.primarySoft },
-  selectRowText: { color: colors.text, fontSize: 16, fontWeight: '600' },
-  selectRowTextOn: { color: colors.primary, fontWeight: '800' },
-  selectTick: { color: colors.primary, fontWeight: '800', fontSize: 16 },
+  selectRowOn: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  selectRowText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  selectRowTextOn: { color: colors.navy },
+  selectTick: { color: colors.primary, fontWeight: '800', fontSize: 18 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

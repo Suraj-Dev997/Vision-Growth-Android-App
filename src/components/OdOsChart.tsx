@@ -74,7 +74,7 @@ function scaleFor(kind: ChartKind, _vals: number[], ages: number[]) {
   } else if (kind === 'al') {
     yMin = AL_MIN;
     yMax = AL_MAX;
-    yTicks = rangeTicks(AL_MIN, AL_MAX, 2).reverse(); // 30…20 like PDF major marks
+    yTicks = rangeTicks(AL_MIN, AL_MAX, 2).reverse(); // 26…20 major marks
     yLabel = (v: number) => v.toFixed(0);
     invertY = false;
   } else {
